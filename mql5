@@ -1,0 +1,83 @@
+
+// GOLD Edge PRO MT5
+// Developer's site: forexroboteasy.com
+// Developed by: Forex Robot Easy Team
+
+// Include necessary libraries and define constants
+#include <Trade\Trade.mqh>
+#include <MovingAverages\MovingAverages.mqh>
+#include <RSI\RSI.mqh>
+
+#define SYMBOL 'XAUUSD'  // Symbol for trading
+#define GRID_DISTANCE 100  // Distance between grid levels in pips
+#define TRAILING_STOP 50  // Trailing stop value in pips
+
+// Initialize objects
+CTrade trade;
+CMovingAverages movingAverages;
+CRSI rsi;
+
+// Initialize variables
+double maFast, maSlow, rsiValue;
+double gridLevels[10];
+int totalOrders;
+
+// Function to calculate moving averages and RSI
+void CalculateIndicators()
+{
+    // Calculate moving averages
+    maFast = movingAverages.iMA(SYMBOL, PERIOD_CURRENT, 10, 0, MODE_EMA, PRICE_CLOSE, 0);
+    maSlow = movingAverages.iMA(SYMBOL, PERIOD_CURRENT, 20, 0, MODE_EMA, PRICE_CLOSE, 0);
+
+    // Calculate RSI
+    rsiValue = rsi.iRSI(SYMBOL, PERIOD_CURRENT, 14, PRICE_CLOSE, 0);
+}
+
+// Function to place grid trades
+void PlaceGridTrades()
+{
+    for (int i = 0; i < totalOrders; i++)
+    {
+        // Calculate grid levels
+        double gridLevel = SymbolInfoDouble(SYMBOL, SYMBOL_ASK) + (i + 1) * GRID_DISTANCE * SymbolInfoDouble(SYMBOL, SYMBOL_POINT);
+
+        // Place buy and sell orders at grid levels
+        trade.BuyStop(gridLevel, 0.1, gridLevel - TRAILING_STOP);
+        trade.SellStop(gridLevel, 0.1, gridLevel + TRAILING_STOP);
+    }
+}
+
+// Function to close orders when drawdown occurs
+void CloseOrdersOnDrawdown()
+{
+    trade.CloseOrder(trade.GetOrder(ticket), ticket - totalOrders);
+    trade.CloseOrder(trade.GetOrder(ticket - totalOrders + 1), ticket - 1);
+}
+
+// Main entry point
+void OnTick()
+{
+    // Calculate indicators
+    CalculateIndicators();
+
+    // Check trend-following strategy
+    if (maFast > maSlow)
+    {
+        // Check if there are no open orders
+        if (totalOrders == 0)
+        {
+            // Place initial grid trades
+            PlaceGridTrades();
+            totalOrders = 10;
+        }
+        
+        // Check if drawdown occurs
+        double drawdown = trade.GetFloatingProfit() / trade.GetBalance() * 100;
+        if (drawdown > 5)
+        {
+            // Close orders on drawdown
+            CloseOrdersOnDrawdown();
+            totalOrders -= 2;
+        }
+    }
+}
